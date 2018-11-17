@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 from typing import List, Set
+import re
 
 import coloredlogs
 import verboselogs
@@ -505,6 +506,8 @@ Least Busy " + Fore.GREEN + str(len(better_servers_list)) + Fore.BLUE + " Server
 # Pings servers with the specified no of "ping",
 # returns a sorted list by Ping Avg and Median Deviation
 def ping_servers(better_servers_list: List, pings: str, stats: bool) -> List:
+    ping_regex = re.compile('0% packet loss')
+
     pinged_servers_list = []
     ping_supports_option_i = True       # older ping command doesn't support "-i"
 
@@ -520,21 +523,14 @@ falling back to wait of 1 second between pings, pings will be slow")
         # ping_result to append 2  lists into it
         ping_result = []
         try:
+            srv_str = "{}.nordvpn.com".format(i[0])
             if ping_supports_option_i:
-                ping_proc = subprocess.Popen(
-                    ["ping", "-n", "-i", ".2", "-c", pings, i[0] + ".nordvpn.com"],
-                    stdout=subprocess.PIPE)
+              ping_proc = subprocess.Popen(['ping', '-n', '-i', '.2', '-c', pings, '-w', '500', srv_str], stdout=subprocess.PIPE).communicate()[0]
             else:
-                ping_proc = subprocess.Popen(
-                    ["ping", "-c", pings, i[0] + ".nordvpn.com"],
-                    stdout=subprocess.PIPE)
-            # pipe the output of ping to grep.
-            ping_output = subprocess.check_output(
-                ["grep", "-B", "1", "min/avg/max"], stdin=ping_proc.stdout)
+               ping_proc = subprocess.Popen(['ping', '-n', '-c', pings, '-w', '500', srv_str], stdout=subprocess.PIPE).communicate()[0]
+            ping_string = str(ping_proc.decode('utf-8'))
 
-            ping_string = str(ping_output)
-            # logger.debug(ping_string)
-            if "0%" not in ping_string:
+            if not ping_regex.search(ping_string):
                 logger.warning("Some packet loss while pinging %s, skipping it", i[0])
                 continue
         except subprocess.CalledProcessError:
